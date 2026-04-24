@@ -18,7 +18,7 @@ This tool helps transform raw responses into clear patterns that teams can act o
 - RWD UI 
 
 ## Live Demo
-👉https://github.com/umidesign-ai/survey-insight-visualizer.git
+👉https://umidesign-ai.github.io/survey-insight-visualizer/
 
 ## My Role
 End-to-end: idea → design → build
