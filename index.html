@@ -71,6 +71,23 @@
   .upload-area p { font-size: 13px; color: var(--text-muted); }
   .upload-area strong { color: var(--accent); cursor: pointer; }
 
+  /* 試試範例資料區 */
+  .sample-divider { display: flex; align-items: center; gap: 10px; margin: 14px 0 10px; font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; }
+  .sample-divider::before, .sample-divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+  .btn-sample { width: 100%; justify-content: center; background: var(--accent-light); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+  .btn-sample:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+  [data-theme="dark"] .btn-sample { color: #b8caf7; }
+  [data-theme="dark"] .btn-sample:hover { color: #fff; }
+
+  .sample-picker { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+  .sample-picker-title { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px; }
+  .sample-card { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; text-align: left; transition: all 0.15s; font-family: inherit; color: var(--text); }
+  .sample-card:hover { border-color: var(--accent); background: var(--accent-light); transform: translateX(2px); }
+  .sample-card-icon { font-size: 22px; line-height: 1.1; }
+  .sample-card-text { flex: 1; min-width: 0; }
+  .sample-card-title { font-size: 13px; font-weight: 600; margin-bottom: 2px; color: var(--text); }
+  .sample-card-desc { font-size: 11px; color: var(--text-muted); line-height: 1.4; }
+
   .field-info { font-size: 12px; color: var(--text-muted); margin-top: 10px; padding: 8px 10px; background: var(--bg); border-radius: 6px; }
 
   label { display: block; font-size: 12px; font-weight: 500; color: var(--text-muted); margin-bottom: 5px; margin-top: 14px; }
@@ -264,6 +281,36 @@
         <p><span data-i18n="dragHere">拖曳 CSV 至此，或</span><br><strong onclick="document.getElementById('fileInput').click()" data-i18n="clickToSelect">點擊選擇檔案</strong></p>
       </div>
       <div class="field-info" id="fieldInfo" style="display:none;"></div>
+
+      <!-- 試試範例資料 -->
+      <div class="sample-divider"><span data-i18n="orDivider">或</span></div>
+      <button class="btn btn-sample" onclick="toggleSamplePicker()" type="button">
+        <span data-i18n="trySample">✨ 試試範例資料</span>
+      </button>
+      <div class="sample-picker" id="samplePicker" style="display:none;">
+        <div class="sample-picker-title" data-i18n="sampleDatasetLabel">選擇範例資料集</div>
+        <button class="sample-card" onclick="loadSampleDataset('ai_tools')" type="button">
+          <span class="sample-card-icon">🤖</span>
+          <div class="sample-card-text">
+            <div class="sample-card-title" data-i18n="sampleAi">AI 工具使用調查</div>
+            <div class="sample-card-desc" data-i18n="sampleAiDesc">AI 工具使用體驗與行為（2,000+ 筆）</div>
+          </div>
+        </button>
+        <button class="sample-card" onclick="loadSampleDataset('coffee_subscription')" type="button">
+          <span class="sample-card-icon">☕</span>
+          <div class="sample-card-text">
+            <div class="sample-card-title" data-i18n="sampleCoffee">咖啡訂閱服務驗證</div>
+            <div class="sample-card-desc" data-i18n="sampleCoffeeDesc">月配咖啡訂閱概念驗證（2,000+ 筆）</div>
+          </div>
+        </button>
+        <button class="sample-card" onclick="loadSampleDataset('digital_banking')" type="button">
+          <span class="sample-card-icon">🏦</span>
+          <div class="sample-card-text">
+            <div class="sample-card-title" data-i18n="sampleBanking">數位銀行使用者需求</div>
+            <div class="sample-card-desc" data-i18n="sampleBankingDesc">數位銀行使用者需求與痛點（2,000+ 筆）</div>
+          </div>
+        </button>
+      </div>
     </div>
 
     <!-- 分析設定 -->
@@ -330,6 +377,325 @@ let currentChartType = 'bar';
 let currentTableMode = 'count';
 let customColors = {};
 
+// ── 範例資料集定義 ─────────────────────────────────────────────
+// 每個資料集是一組欄位 schema，由 generateDataset() 動態產生 N 筆有真實感的資料。
+// 欄位類型：
+//   'single' (單選，依 weights 隨機抽一個)
+//   'multi'  (多選，每個選項依 prob 獨立決定要不要勾)
+// 欄位可定義 dependsOn：根據另一欄位的值動態調整權重，讓交叉分析出現有意義的關聯。
+
+const SAMPLE_DATASETS = {
+  ai_tools: {
+    title: 'AI Tool Usage Survey',
+    description: 'User experience and behavior with AI tools (2,000+ responses)',
+    rows: 2200,
+    fields: [
+      { name: 'Age Group', type: 'single', options: ['18-24','25-34','35-44','45-54','55+'], weights: [22,38,22,12,6] },
+      { name: 'Profession', type: 'single', options: ['Software Engineer','Designer','Marketing','Product Manager','Researcher','Student','Other'], weights: [28,10,14,16,8,14,10] },
+      { name: 'Usage Frequency', type: 'single', options: ['Multiple times a day','Daily','A few times a week','Weekly','Rarely','Never tried'],
+        dependsOn: { field: 'Profession', map: {
+          'Software Engineer': [42,30,18,6,3,1],
+          'Designer':          [25,28,25,12,8,2],
+          'Marketing':         [20,28,28,15,7,2],
+          'Product Manager':   [35,30,20,10,4,1],
+          'Researcher':        [30,28,22,12,6,2],
+          'Student':           [22,25,25,15,10,3],
+          'Other':             [12,18,25,18,18,9],
+        }}
+      },
+      { name: 'Primary Use Cases', type: 'multi', options: [
+        { v: 'Writing & editing', prob: 0.55 },
+        { v: 'Coding assistance', prob: 0.42 },
+        { v: 'Research & summarization', prob: 0.50 },
+        { v: 'Brainstorming ideas', prob: 0.48 },
+        { v: 'Image generation', prob: 0.28 },
+        { v: 'Data analysis', prob: 0.32 },
+        { v: 'Customer support', prob: 0.18 },
+        { v: 'Translation', prob: 0.25 },
+        { v: 'Learning new topics', prob: 0.45 },
+      ], dependsOn: { field: 'Profession', boost: {
+        'Software Engineer': { 'Coding assistance': 0.45, 'Data analysis': 0.18 },
+        'Designer':          { 'Image generation': 0.40, 'Brainstorming ideas': 0.20 },
+        'Marketing':         { 'Writing & editing': 0.25, 'Brainstorming ideas': 0.20 },
+        'Researcher':        { 'Research & summarization': 0.30, 'Data analysis': 0.25 },
+        'Student':           { 'Learning new topics': 0.30, 'Writing & editing': 0.15 },
+      }}},
+      { name: 'Preferred Tool', type: 'single', options: ['ChatGPT','Claude','Gemini','Copilot','Perplexity','Other / Local LLM'], weights: [40,22,15,12,7,4] },
+      { name: 'Satisfaction Level', type: 'single', options: ['Very satisfied','Satisfied','Neutral','Dissatisfied','Very dissatisfied'],
+        dependsOn: { field: 'Usage Frequency', map: {
+          'Multiple times a day': [40,42,12,4,2],
+          'Daily':                [32,45,16,5,2],
+          'A few times a week':   [22,42,25,8,3],
+          'Weekly':               [15,38,32,11,4],
+          'Rarely':               [10,28,40,15,7],
+          'Never tried':          [8,18,52,15,7],
+        }}
+      },
+      { name: 'Trust in AI', type: 'single', options: ['Fully trust','Mostly trust','Sometimes trust','Rarely trust','Do not trust'], weights: [8,32,38,16,6] },
+      { name: 'Pain Points', type: 'multi', options: [
+        { v: 'Inaccurate answers', prob: 0.62 },
+        { v: 'Outdated information', prob: 0.45 },
+        { v: 'Lacks context awareness', prob: 0.40 },
+        { v: 'Privacy concerns', prob: 0.38 },
+        { v: 'Too expensive', prob: 0.22 },
+        { v: 'Slow response', prob: 0.18 },
+        { v: 'Hard to integrate into workflow', prob: 0.32 },
+        { v: 'Unclear how to prompt effectively', prob: 0.35 },
+      ]},
+      { name: 'Willingness to Pay (USD/month)', type: 'single', options: ['$0 (Free only)','$1-10','$11-20','$21-50','$51+'], weights: [38,18,22,15,7] },
+      { name: 'Recommendation Likelihood', type: 'single', options: ['Definitely yes','Probably yes','Maybe','Probably not','Definitely not'],
+        dependsOn: { field: 'Satisfaction Level', map: {
+          'Very satisfied':    [60,30,8,1,1],
+          'Satisfied':         [25,50,20,4,1],
+          'Neutral':           [5,25,55,12,3],
+          'Dissatisfied':      [2,8,30,45,15],
+          'Very dissatisfied': [1,3,10,30,56],
+        }}
+      },
+    ],
+  },
+
+  coffee_subscription: {
+    title: 'Coffee Subscription Service Validation',
+    description: 'Concept validation for a monthly coffee subscription (2,000+ responses)',
+    rows: 2100,
+    fields: [
+      { name: 'Age Group', type: 'single', options: ['18-24','25-34','35-44','45-54','55+'], weights: [16,32,26,18,8] },
+      { name: 'Daily Coffee Consumption', type: 'single', options: ['None','1 cup','2-3 cups','4-5 cups','6+ cups'], weights: [10,32,42,12,4] },
+      { name: 'Where You Buy Coffee Most', type: 'single', options: ['Cafés / specialty shops','Supermarket beans','Online specialty roasters','Convenience store','Office / workplace','Make at home from supermarket'], weights: [28,22,12,10,15,13] },
+      { name: 'Brewing Method at Home', type: 'multi', options: [
+        { v: 'Drip / pour-over', prob: 0.45 },
+        { v: 'Espresso machine', prob: 0.28 },
+        { v: 'French press', prob: 0.22 },
+        { v: 'Capsule / pod machine', prob: 0.32 },
+        { v: 'Cold brew', prob: 0.18 },
+        { v: 'AeroPress', prob: 0.12 },
+        { v: 'I do not brew at home', prob: 0.20 },
+      ]},
+      { name: 'Monthly Coffee Spend (USD)', type: 'single', options: ['Under $20','$20-50','$51-100','$101-200','Over $200'],
+        dependsOn: { field: 'Daily Coffee Consumption', map: {
+          'None':     [70,22,5,2,1],
+          '1 cup':    [38,42,15,4,1],
+          '2-3 cups': [12,38,32,15,3],
+          '4-5 cups': [5,18,35,32,10],
+          '6+ cups':  [3,10,22,38,27],
+        }}
+      },
+      { name: 'Subscription Willingness', type: 'single', options: ['Definitely subscribe','Probably subscribe','Maybe','Probably not','Definitely not'], weights: [12,28,32,20,8] },
+      { name: 'Acceptable Monthly Price (USD)', type: 'single', options: ['Under $15','$15-25','$26-40','$41-60','Over $60'],
+        dependsOn: { field: 'Subscription Willingness', map: {
+          'Definitely subscribe': [10,28,38,18,6],
+          'Probably subscribe':   [22,40,28,8,2],
+          'Maybe':                [38,38,18,5,1],
+          'Probably not':         [55,30,12,2,1],
+          'Definitely not':       [70,22,6,1,1],
+        }}
+      },
+      { name: 'Preferred Delivery Frequency', type: 'single', options: ['Weekly','Every 2 weeks','Monthly','Every 2 months','On-demand only'], weights: [10,28,42,12,8] },
+      { name: 'What Matters Most', type: 'multi', options: [
+        { v: 'Bean quality / origin', prob: 0.62 },
+        { v: 'Freshness (roast date)', prob: 0.55 },
+        { v: 'Variety / discovery', prob: 0.45 },
+        { v: 'Price', prob: 0.50 },
+        { v: 'Sustainable / fair trade', prob: 0.32 },
+        { v: 'Convenience', prob: 0.42 },
+        { v: 'Customizable preferences', prob: 0.30 },
+        { v: 'Local roasters', prob: 0.28 },
+      ]},
+      { name: 'Brand Perception of Subscription Boxes', type: 'single', options: ['Premium & curated','Convenient & practical','Trendy / lifestyle','Wasteful / over-packaged','Overpriced','No strong opinion'], weights: [22,28,15,12,15,8] },
+      { name: 'Concerns About Subscribing', type: 'multi', options: [
+        { v: 'Too much coffee piling up', prob: 0.42 },
+        { v: 'Hard to cancel', prob: 0.38 },
+        { v: 'Quality might decline', prob: 0.32 },
+        { v: 'Too expensive over time', prob: 0.48 },
+        { v: 'Limited variety', prob: 0.25 },
+        { v: 'Packaging waste', prob: 0.30 },
+        { v: 'Prefer to choose each time', prob: 0.45 },
+      ]},
+    ],
+  },
+
+  digital_banking: {
+    title: 'Digital Banking User Needs',
+    description: 'User needs and frustrations in digital banking (2,000+ responses)',
+    rows: 2300,
+    fields: [
+      { name: 'Age Group', type: 'single', options: ['18-24','25-34','35-44','45-54','55+'], weights: [18,32,24,16,10] },
+      { name: 'Primary Banking Device', type: 'single', options: ['Mobile app','Desktop / laptop','Both equally','Branch / in-person'],
+        dependsOn: { field: 'Age Group', map: {
+          '18-24': [78,8,12,2],
+          '25-34': [70,12,15,3],
+          '35-44': [55,18,22,5],
+          '45-54': [38,28,25,9],
+          '55+':   [25,32,28,15],
+        }}
+      },
+      { name: 'Features Used Regularly', type: 'multi', options: [
+        { v: 'Money transfer', prob: 0.85 },
+        { v: 'Bill payment', prob: 0.72 },
+        { v: 'Savings account', prob: 0.55 },
+        { v: 'Investment / brokerage', prob: 0.32 },
+        { v: 'Credit card management', prob: 0.62 },
+        { v: 'Loan / mortgage', prob: 0.20 },
+        { v: 'International transfer', prob: 0.18 },
+        { v: 'Budget tracking', prob: 0.28 },
+        { v: 'Cryptocurrency', prob: 0.12 },
+      ], dependsOn: { field: 'Age Group', boost: {
+        '18-24': { 'Cryptocurrency': 0.18, 'Budget tracking': 0.15 },
+        '25-34': { 'Investment / brokerage': 0.20, 'Budget tracking': 0.15 },
+        '45-54': { 'Loan / mortgage': 0.18 },
+        '55+':   { 'Loan / mortgage': 0.15 },
+      }}},
+      { name: 'Login Frequency', type: 'single', options: ['Multiple times a day','Daily','A few times a week','Weekly','Less than weekly'], weights: [22,38,25,10,5] },
+      { name: 'Biggest Pain Points', type: 'multi', options: [
+        { v: 'Slow app performance', prob: 0.38 },
+        { v: 'Confusing navigation', prob: 0.35 },
+        { v: 'Frequent forced logouts', prob: 0.42 },
+        { v: 'Poor customer support', prob: 0.45 },
+        { v: 'Hidden fees', prob: 0.50 },
+        { v: 'Difficult to dispute charges', prob: 0.32 },
+        { v: 'Too many security checks', prob: 0.28 },
+        { v: 'Lacks budgeting features', prob: 0.30 },
+        { v: 'Outdated UI design', prob: 0.32 },
+      ]},
+      { name: 'Trust Level', type: 'single', options: ['Fully trust','Mostly trust','Sometimes worried','Often worried','Do not trust'], weights: [15,42,28,10,5] },
+      { name: 'Top Security Concern', type: 'single', options: ['Account hacking','Phishing scams','Identity theft','Data breaches','Unauthorized transactions','Not concerned'], weights: [22,18,20,15,18,7] },
+      { name: 'Preferred Authentication', type: 'single', options: ['Biometric (face / fingerprint)','SMS OTP','Authenticator app','Hardware token','Password only'],
+        dependsOn: { field: 'Age Group', map: {
+          '18-24': [55,22,18,2,3],
+          '25-34': [50,25,18,3,4],
+          '35-44': [42,32,15,4,7],
+          '45-54': [30,42,12,4,12],
+          '55+':   [22,48,8,3,19],
+        }}
+      },
+      { name: 'Desired Improvements', type: 'multi', options: [
+        { v: 'Faster transfers', prob: 0.55 },
+        { v: 'Better budgeting tools', prob: 0.48 },
+        { v: 'Lower fees', prob: 0.62 },
+        { v: 'Cleaner interface', prob: 0.42 },
+        { v: 'Real human support', prob: 0.50 },
+        { v: 'Investment guidance', prob: 0.35 },
+        { v: 'Spending insights / analytics', prob: 0.45 },
+        { v: 'Cross-bank account view', prob: 0.32 },
+        { v: 'Better international transfer rates', prob: 0.28 },
+      ]},
+      { name: 'Likelihood to Switch Banks', type: 'single', options: ['Very likely','Somewhat likely','Neutral','Somewhat unlikely','Very unlikely'],
+        dependsOn: { field: 'Trust Level', map: {
+          'Fully trust':       [3,8,18,30,41],
+          'Mostly trust':      [8,18,28,28,18],
+          'Sometimes worried': [22,32,28,12,6],
+          'Often worried':     [42,32,15,7,4],
+          'Do not trust':      [60,22,10,5,3],
+        }}
+      },
+    ],
+  },
+};
+
+// ── 資料生成器 ────────────────────────────────────────────────
+// 用 mulberry32 PRNG，固定 seed 確保每次生成資料一致（可重現），但每組資料集 seed 不同
+function makeRng(seed) {
+  let s = seed >>> 0;
+  return function() {
+    s = (s + 0x6D2B79F5) >>> 0;
+    let t = s;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function pickWeighted(rng, options, weights) {
+  const total = weights.reduce((a, b) => a + b, 0);
+  let r = rng() * total;
+  for (let i = 0; i < options.length; i++) {
+    r -= weights[i];
+    if (r <= 0) return options[i];
+  }
+  return options[options.length - 1];
+}
+
+function generateDataset(key) {
+  const def = SAMPLE_DATASETS[key];
+  if (!def) return null;
+  // 用 key 做為 seed 的一部分（不同資料集生成不同樣本）
+  let seed = 0;
+  for (let i = 0; i < key.length; i++) seed = (seed * 31 + key.charCodeAt(i)) >>> 0;
+  const rng = makeRng(seed || 1);
+  const rows = [];
+  for (let i = 0; i < def.rows; i++) {
+    const row = {};
+    for (const f of def.fields) {
+      if (f.type === 'single') {
+        let weights = f.weights;
+        // 處理 dependsOn：依別欄位的值動態調整權重
+        if (f.dependsOn && f.dependsOn.map) {
+          const parentVal = row[f.dependsOn.field];
+          if (parentVal && f.dependsOn.map[parentVal]) weights = f.dependsOn.map[parentVal];
+        }
+        if (!weights) weights = f.options.map(() => 1);
+        row[f.name] = pickWeighted(rng, f.options, weights);
+      } else if (f.type === 'multi') {
+        // 依條件調整每個選項的勾選機率
+        let boost = {};
+        if (f.dependsOn && f.dependsOn.boost) {
+          const parentVal = row[f.dependsOn.field];
+          if (parentVal && f.dependsOn.boost[parentVal]) boost = f.dependsOn.boost[parentVal];
+        }
+        const picks = [];
+        for (const opt of f.options) {
+          const p = Math.min(0.95, opt.prob + (boost[opt.v] || 0));
+          if (rng() < p) picks.push(opt.v);
+        }
+        // 至少要勾一個（避免空欄位影響統計）
+        if (!picks.length) {
+          const fallback = f.options[Math.floor(rng() * f.options.length)];
+          picks.push(fallback.v);
+        }
+        row[f.name] = picks.join(', ');
+      }
+    }
+    rows.push(row);
+  }
+  return { headers: def.fields.map(f => f.name), rows };
+}
+
+// 載入範例資料集（行為等同上傳 CSV）
+function loadSampleDataset(key) {
+  const result = generateDataset(key);
+  if (!result) return;
+  const def = SAMPLE_DATASETS[key];
+  rawData = result.rows;
+  headers = result.headers;
+  document.getElementById('dataCount').textContent = t('rowsLoaded', rawData.length);
+  document.getElementById('fieldInfo').style.display = 'block';
+  document.getElementById('fieldInfo').textContent = `${def.title} · ${t('fieldsCount', headers.length)}`;
+  populateSelects();
+  // 自動選擇有意義的預設欄位來展示交叉分析的價值：
+  // X 軸用第一個欄位（通常是人口屬性），Y 軸用最後一個（通常是相關度高的指標）
+  const fieldX = def.fields[0].name;
+  const fieldY = def.fields[def.fields.length - 1].name;
+  document.getElementById('fieldSingle').value = fieldY;
+  document.getElementById('fieldX').value = fieldX;
+  document.getElementById('fieldY').value = fieldY;
+  // 收起選單
+  const picker = document.getElementById('samplePicker');
+  if (picker) picker.style.display = 'none';
+  // 標記當前選中的資料集
+  currentSampleKey = key;
+  runAnalysis();
+}
+
+let currentSampleKey = null;
+
+// 展開/收起範例資料挑選器
+function toggleSamplePicker() {
+  const picker = document.getElementById('samplePicker');
+  if (!picker) return;
+  picker.style.display = picker.style.display === 'none' ? 'flex' : 'none';
+}
+
 // ── i18n 多語系 ───────────────────────────────────────────────
 const I18N = {
   zh: {
@@ -338,6 +704,15 @@ const I18N = {
     dataImport: '資料匯入',
     dragHere: '拖曳 CSV 至此，或',
     clickToSelect: '點擊選擇檔案',
+    orDivider: '或',
+    trySample: '✨ 試試範例資料',
+    sampleDatasetLabel: '選擇範例資料集',
+    sampleAi: 'AI 工具使用調查',
+    sampleCoffee: '咖啡訂閱服務驗證',
+    sampleBanking: '數位銀行使用者需求',
+    sampleAiDesc: 'AI 工具使用體驗與行為（2,000+ 筆）',
+    sampleCoffeeDesc: '月配咖啡訂閱概念驗證（2,000+ 筆）',
+    sampleBankingDesc: '數位銀行使用者需求與痛點（2,000+ 筆）',
     analysisSettings: '分析設定',
     singleAnalysis: '單題分析',
     crossAnalysis: '交叉分析',
@@ -390,6 +765,15 @@ const I18N = {
     dataImport: 'Import Data',
     dragHere: 'Drag CSV here, or',
     clickToSelect: 'click to select file',
+    orDivider: 'or',
+    trySample: '✨ Try Sample Data',
+    sampleDatasetLabel: 'Choose a sample dataset',
+    sampleAi: 'AI Tool Usage Survey',
+    sampleCoffee: 'Coffee Subscription Validation',
+    sampleBanking: 'Digital Banking User Needs',
+    sampleAiDesc: 'User experience and behavior with AI tools (2,000+ responses)',
+    sampleCoffeeDesc: 'Concept validation for monthly coffee subscription (2,000+ responses)',
+    sampleBankingDesc: 'User needs and frustrations in digital banking (2,000+ responses)',
     analysisSettings: 'Analysis Settings',
     singleAnalysis: 'Single Question',
     crossAnalysis: 'Cross Analysis',
@@ -442,6 +826,15 @@ const I18N = {
     dataImport: 'データ読み込み',
     dragHere: 'CSV をドラッグ、または',
     clickToSelect: 'ファイルを選択',
+    orDivider: 'または',
+    trySample: '✨ サンプルデータを試す',
+    sampleDatasetLabel: 'サンプルデータセット選択',
+    sampleAi: 'AI ツール利用調査',
+    sampleCoffee: 'コーヒーサブスク検証',
+    sampleBanking: 'デジタル銀行ユーザーニーズ',
+    sampleAiDesc: 'AI ツールの利用体験と行動（2,000+ 件）',
+    sampleCoffeeDesc: '月額コーヒー定期便のコンセプト検証（2,000+ 件）',
+    sampleBankingDesc: 'デジタル銀行のニーズと課題（2,000+ 件）',
     analysisSettings: '分析設定',
     singleAnalysis: '単一質問',
     crossAnalysis: 'クロス分析',
@@ -494,6 +887,15 @@ const I18N = {
     dataImport: 'Daten importieren',
     dragHere: 'CSV hierher ziehen, oder',
     clickToSelect: 'Datei auswählen',
+    orDivider: 'oder',
+    trySample: '✨ Beispieldaten testen',
+    sampleDatasetLabel: 'Beispieldatensatz wählen',
+    sampleAi: 'Umfrage zur KI-Nutzung',
+    sampleCoffee: 'Kaffee-Abo Validierung',
+    sampleBanking: 'Digital-Banking Nutzerbedarf',
+    sampleAiDesc: 'Nutzererfahrung mit KI-Tools (2.000+ Antworten)',
+    sampleCoffeeDesc: 'Konzeptvalidierung für ein Kaffee-Abo (2.000+ Antworten)',
+    sampleBankingDesc: 'Bedürfnisse und Frust beim Digital-Banking (2.000+ Antworten)',
     analysisSettings: 'Analyse-Einstellungen',
     singleAnalysis: 'Einzelfrage',
     crossAnalysis: 'Kreuzanalyse',
