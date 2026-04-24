@@ -1,0 +1,1461 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>問卷分析工具</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #f8f7f4;
+    --surface: #ffffff;
+    --surface-2: #faf9f7;
+    --border: #e4e2db;
+    --text: #1a1a18;
+    --text-muted: #6b6a65;
+    --accent: #2d5be3;
+    --accent-light: #eef1fc;
+    --warn-bg: #faeeda;
+    --warn-text: #854f0b;
+    --ok-bg: #eaf3de;
+    --ok-text: #3b6d11;
+    --radius: 10px;
+    --shadow: 0 1px 4px rgba(0,0,0,0.07);
+    --grid-line: #f0efe9;
+  }
+  [data-theme="dark"] {
+    --bg: #15151a;
+    --surface: #1f2027;
+    --surface-2: #262830;
+    --border: #353742;
+    --text: #f0f0f0;
+    --text-muted: #9e9eaa;
+    --accent: #6c95f2;
+    --accent-light: #2a3a6e;
+    --warn-bg: #4a3618;
+    --warn-text: #f0c074;
+    --ok-bg: #1f3a1a;
+    --ok-text: #9ed87f;
+    --shadow: 0 1px 4px rgba(0,0,0,0.4);
+    --grid-line: #2c2e38;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Helvetica Neue', 'PingFang TC', 'Microsoft JhengHei', sans-serif; background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.6; transition: background 0.2s, color 0.2s; }
+  
+  header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 24px; display: flex; align-items: center; gap: 12px; position: sticky; top: 0; z-index: 100; }
+  header h1 { font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
+  header span { font-size: 12px; color: var(--text-muted); background: var(--bg); padding: 2px 10px; border-radius: 20px; border: 1px solid var(--border); }
+  .header-spacer { flex: 1; }
+  .header-controls { display: flex; gap: 6px; align-items: center; }
+  .icon-btn { background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: 8px; width: 34px; height: 34px; font-size: 15px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; padding: 0; transition: all 0.15s; }
+  .icon-btn:hover { background: var(--surface-2); border-color: var(--text-muted); }
+  .lang-select { background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: 8px; height: 34px; padding: 0 26px 0 10px; font-size: 12px; cursor: pointer; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 12 12'%3E%3Cpath fill='%236b6a65' d='M6 8L1 3h10z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 8px center; width: auto; }
+  [data-theme="dark"] .lang-select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 12 12'%3E%3Cpath fill='%239e9eaa' d='M6 8L1 3h10z'/%3E%3C/svg%3E"); }
+
+  /* X/Y 對調按鈕 */
+  .swap-row { display: flex; justify-content: center; margin: 6px 0; }
+  .swap-btn { background: var(--accent-light); border: 1px solid var(--accent); color: var(--accent); border-radius: 7px; padding: 5px 12px; font-size: 12px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; transition: all 0.15s; font-family: inherit; }
+  .swap-btn:hover { background: var(--accent); color: #fff; }
+  [data-theme="dark"] .swap-btn { color: #b8caf7; }
+  [data-theme="dark"] .swap-btn:hover { color: #fff; }
+
+  .main { max-width: 1100px; margin: 0 auto; padding: 24px 20px; display: grid; grid-template-columns: 280px 1fr; gap: 20px; }
+
+  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; }
+  .panel-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); margin-bottom: 14px; }
+
+  .upload-area { border: 2px dashed var(--border); border-radius: var(--radius); padding: 28px 16px; text-align: center; cursor: pointer; transition: border-color 0.2s, background 0.2s; }
+  .upload-area:hover, .upload-area.drag { border-color: var(--accent); background: var(--accent-light); }
+  .upload-area input { display: none; }
+  .upload-icon { font-size: 28px; margin-bottom: 8px; }
+  .upload-area p { font-size: 13px; color: var(--text-muted); }
+  .upload-area strong { color: var(--accent); cursor: pointer; }
+
+  .field-info { font-size: 12px; color: var(--text-muted); margin-top: 10px; padding: 8px 10px; background: var(--bg); border-radius: 6px; }
+
+  label { display: block; font-size: 12px; font-weight: 500; color: var(--text-muted); margin-bottom: 5px; margin-top: 14px; }
+  select { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface); font-size: 13px; color: var(--text); outline: none; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b6a65' d='M6 8L1 3h10z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; cursor: pointer; }
+  [data-theme="dark"] select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%239e9eaa' d='M6 8L1 3h10z'/%3E%3C/svg%3E"); }
+  select:focus { border-color: var(--accent); }
+  select:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .mode-toggle { display: flex; background: var(--bg); border-radius: 8px; padding: 3px; gap: 2px; margin-top: 14px; }
+  .mode-btn { flex: 1; padding: 6px 8px; border: none; border-radius: 6px; font-size: 12px; cursor: pointer; background: transparent; color: var(--text-muted); font-weight: 500; transition: all 0.15s; }
+  .mode-btn.active { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
+
+  .btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border: 1px solid var(--border); border-radius: 7px; font-size: 13px; font-weight: 500; cursor: pointer; background: var(--surface); color: var(--text); transition: all 0.15s; text-decoration: none; }
+  .btn:hover { background: var(--bg); border-color: #c0bdb5; }
+  .btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .btn-primary:hover { background: #2450cc; border-color: #2450cc; }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-sm { padding: 5px 12px; font-size: 12px; }
+
+  .content-area { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+
+  .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+  .toolbar-left { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .toolbar-right { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  .chart-type-toggle { display: flex; background: var(--bg); border-radius: 8px; padding: 3px; gap: 2px; }
+  .ct-btn { padding: 5px 12px; border: none; border-radius: 5px; font-size: 12px; cursor: pointer; background: transparent; color: var(--text-muted); font-weight: 500; transition: all 0.15s; }
+  .ct-btn.active { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
+
+  .theme-dots { display: flex; gap: 6px; align-items: center; }
+  .theme-dot { width: 18px; height: 18px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; transition: transform 0.15s; }
+  .theme-dot:hover { transform: scale(1.2); }
+  .theme-dot.active { border-color: var(--text); }
+
+  .chart-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; position: relative; }
+  .chart-container { position: relative; height: 340px; cursor: zoom-in; }
+  .chart-zoom-hint { position: absolute; top: 10px; right: 10px; font-size: 11px; color: var(--text-muted); background: var(--bg); padding: 3px 8px; border-radius: 12px; opacity: 0.7; pointer-events: none; }
+
+  .table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  .table-toolbar { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--border); flex-wrap: wrap; gap: 8px; }
+  .table-toolbar > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .table-mode { display: flex; background: var(--bg); border-radius: 7px; padding: 3px; gap: 2px; }
+  .tm-btn { padding: 4px 12px; border: none; border-radius: 5px; font-size: 12px; cursor: pointer; background: transparent; color: var(--text-muted); font-weight: 500; transition: all 0.15s; }
+  .tm-btn.active { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
+  .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { background: var(--bg); padding: 9px 14px; text-align: left; font-weight: 600; font-size: 12px; color: var(--text-muted); border-bottom: 1px solid var(--border); white-space: nowrap; }
+  td { padding: 8px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--surface-2); }
+  .td-num { text-align: right; font-variant-numeric: tabular-nums; font-size: 13px; white-space: nowrap; }
+  .td-pct { color: var(--text-muted); }
+  .td-total { font-weight: 600; background: var(--bg) !important; }
+
+  /* 長文字選項收合機制 */
+  .label-cell { max-width: 360px; }
+  .label-cell .label-text { word-break: break-word; }
+  .label-cell .label-text.collapsed { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .label-toggle { display: inline-block; margin-top: 4px; font-size: 11px; color: var(--accent); cursor: pointer; user-select: none; background: none; border: none; padding: 0; font-family: inherit; }
+  .label-toggle:hover { text-decoration: underline; }
+
+  .stats-panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 20px; }
+  .chi-result { display: flex; align-items: flex-start; gap: 14px; flex-wrap: wrap; }
+  .chi-badge { padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+  .chi-sig { background: var(--ok-bg); color: var(--ok-text); }
+  .chi-not { background: var(--warn-bg); color: var(--warn-text); }
+  .chi-detail { font-size: 13px; color: var(--text-muted); }
+  .chi-detail strong { color: var(--text); }
+
+  .color-editor { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
+  .color-row { display: flex; align-items: center; gap: 10px; padding: 5px 0; border-bottom: 1px solid var(--border); }
+  .color-row:last-child { border-bottom: none; }
+  .color-row label { flex: 1; margin: 0; font-size: 13px; color: var(--text); font-weight: 400; }
+  input[type="color"] { width: 32px; height: 28px; border: 1px solid var(--border); border-radius: 5px; padding: 2px; cursor: pointer; background: none; }
+
+  .empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); }
+  .empty-state .icon { font-size: 40px; margin-bottom: 12px; opacity: 0.4; }
+  .empty-state p { font-size: 14px; }
+
+  .cross-hint { font-size: 12px; color: var(--text-muted); background: var(--accent-light); padding: 8px 10px; border-radius: 6px; margin-top: 8px; }
+
+  .divider { height: 1px; background: var(--border); margin: 14px 0; }
+
+  .color-section-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); margin-bottom: 8px; }
+
+  /* 交叉表垂直堆疊模式：每個 X 選項一個區塊，內含多個 Y 子項 */
+  .cross-vertical { padding: 8px 12px 12px; }
+  .cross-group { background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; margin-bottom: 10px; }
+  .cross-group:last-child { margin-bottom: 0; }
+  .cross-group-header { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+  .cross-group-title { font-size: 13px; font-weight: 600; color: var(--text); flex: 1; min-width: 0; word-break: break-word; }
+  .cross-group-total { font-size: 12px; color: var(--text-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .cross-sub-row { display: flex; justify-content: space-between; align-items: center; padding: 5px 0; gap: 10px; font-size: 12px; }
+  .cross-sub-label { color: var(--text-muted); flex: 1; min-width: 0; word-break: break-word; }
+  .cross-sub-val { font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--text); }
+  .cross-sub-val .pct { color: var(--text-muted); font-size: 11px; margin-left: 4px; }
+
+  /* 切換水平表格 / 垂直堆疊 的按鈕 */
+  .table-layout-toggle { display: flex; background: var(--bg); border-radius: 7px; padding: 3px; gap: 2px; }
+  .tl-btn { padding: 4px 10px; border: none; border-radius: 5px; font-size: 12px; cursor: pointer; background: transparent; color: var(--text-muted); font-weight: 500; transition: all 0.15s; font-family: inherit; }
+  .tl-btn.active { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
+
+  /* ── 圖表放大 lightbox ─────────────────────────────────────── */
+  .lightbox { position: fixed; inset: 0; background: rgba(0,0,0,0.78); z-index: 1000; display: none; align-items: center; justify-content: center; padding: 20px; }
+  .lightbox.show { display: flex; }
+  .lightbox-content { background: var(--surface); border-radius: var(--radius); padding: 16px; width: 100%; max-width: 1000px; max-height: 92vh; display: flex; flex-direction: column; position: relative; }
+  .lightbox-close { position: absolute; top: 8px; right: 12px; background: none; border: none; font-size: 26px; color: var(--text-muted); cursor: pointer; line-height: 1; padding: 4px 8px; border-radius: 6px; }
+  .lightbox-close:hover { background: var(--bg); color: var(--text); }
+  .lightbox-canvas-wrap { flex: 1; min-height: 0; padding: 24px 8px 8px; position: relative; }
+  .lightbox-title { font-size: 14px; font-weight: 600; padding-right: 36px; }
+  @media (max-width: 768px) {
+    .lightbox { padding: 8px; }
+    .lightbox-content { padding: 10px; }
+    .lightbox-canvas-wrap { padding: 18px 0 0; }
+  }
+
+  /* ── 桌面版 (768px 以下進入手機優化) ───────────────────────── */
+  @media (max-width: 768px) {
+    body { font-size: 13px; }
+    header { padding: 10px 14px; }
+    header h1 { font-size: 14px; }
+    header span { font-size: 11px; padding: 2px 8px; }
+
+    .main { grid-template-columns: 1fr; padding: 12px 10px; gap: 12px; }
+
+    .panel { padding: 14px; }
+    .panel-title { margin-bottom: 10px; }
+
+    .upload-area { padding: 20px 12px; }
+    .upload-icon { font-size: 24px; }
+
+    /* 工具列：手機端兩列堆疊但元件不重疊 */
+    .toolbar { gap: 8px; }
+    .toolbar-left, .toolbar-right { width: 100%; justify-content: space-between; }
+    .toolbar-right { gap: 6px; }
+
+    /* 圖表區：壓縮 padding，圖表高度動態由 JS 控制 */
+    .chart-wrap { padding: 12px 10px; }
+    .chart-container { min-height: 240px; }
+    .chart-zoom-hint { top: 6px; right: 6px; font-size: 10px; padding: 2px 6px; }
+
+    /* 表格：壓縮間距、允許文字折行 */
+    .table-toolbar { padding: 10px 12px; }
+    th, td { padding: 7px 10px; font-size: 12px; }
+    .td-num { font-size: 12px; }
+    .label-cell { max-width: 200px; }
+
+    .stats-panel { padding: 12px 14px; }
+    .chi-result { gap: 10px; }
+    .chi-detail { font-size: 12px; line-height: 1.5; }
+
+    .empty-state { padding: 40px 16px; }
+  }
+
+  @media (max-width: 480px) {
+    .main { padding: 10px 8px; }
+    .panel { padding: 12px; }
+    .chart-wrap { padding: 10px 6px; }
+    th, td { padding: 6px 8px; }
+    .label-cell { max-width: 150px; }
+    .table-toolbar > div { width: 100%; justify-content: space-between; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1 data-i18n="appTitle">📊 問卷分析工具</h1>
+  <span id="dataCount" data-i18n="noData">尚未載入資料</span>
+  <div class="header-spacer"></div>
+  <div class="header-controls">
+    <select class="lang-select" id="langSelect" onchange="setLang(this.value)" aria-label="Language">
+      <option value="zh">繁體中文</option>
+      <option value="en">English</option>
+      <option value="ja">日本語</option>
+      <option value="de">Deutsch</option>
+    </select>
+    <button class="icon-btn" id="themeBtn" onclick="toggleTheme()" aria-label="Theme">🌙</button>
+  </div>
+</header>
+
+<div class="main">
+  <!-- 左側控制面板 -->
+  <aside>
+    <!-- 上傳 -->
+    <div class="panel" style="margin-bottom:16px;">
+      <div class="panel-title" data-i18n="dataImport">資料匯入</div>
+      <div class="upload-area" id="uploadArea">
+        <input type="file" id="fileInput" accept=".csv">
+        <div class="upload-icon">📁</div>
+        <p><span data-i18n="dragHere">拖曳 CSV 至此，或</span><br><strong onclick="document.getElementById('fileInput').click()" data-i18n="clickToSelect">點擊選擇檔案</strong></p>
+      </div>
+      <div class="field-info" id="fieldInfo" style="display:none;"></div>
+    </div>
+
+    <!-- 分析設定 -->
+    <div class="panel" style="margin-bottom:16px;">
+      <div class="panel-title" data-i18n="analysisSettings">分析設定</div>
+      <div class="mode-toggle">
+        <button class="mode-btn active" id="modeSimple" onclick="setMode('simple')" data-i18n="singleAnalysis">單題分析</button>
+        <button class="mode-btn" id="modeCross" onclick="setMode('cross')" data-i18n="crossAnalysis">交叉分析</button>
+      </div>
+
+      <div id="simpleFields">
+        <label data-i18n="analysisField">分析題目</label>
+        <select id="fieldSingle" onchange="runAnalysis()" disabled><option data-i18n="importFirst">請先匯入資料</option></select>
+      </div>
+
+      <div id="crossFields" style="display:none;">
+        <label data-i18n="xField">X 軸題目（列）</label>
+        <select id="fieldX" onchange="runAnalysis()" disabled><option data-i18n="importFirst">請先匯入資料</option></select>
+        <div class="swap-row">
+          <button class="swap-btn" onclick="swapXY()" type="button">⇅ <span data-i18n="swapXY">對調 X/Y 軸</span></button>
+        </div>
+        <label data-i18n="yField">Y 軸題目（欄）</label>
+        <select id="fieldY" onchange="runAnalysis()" disabled><option data-i18n="importFirst">請先匯入資料</option></select>
+        <div class="cross-hint" data-i18n="chiHint">交叉分析會自動執行卡方檢定</div>
+      </div>
+    </div>
+
+    <!-- 圖表設定 -->
+    <div class="panel">
+      <div class="panel-title" data-i18n="chartColors">圖表顏色</div>
+      <div class="color-section-title" data-i18n="theme">主題</div>
+      <div class="theme-dots" id="themeDots"></div>
+      <div class="divider"></div>
+      <div class="color-section-title" data-i18n="customColors">自訂選項顏色</div>
+      <div id="colorEditor"><p style="font-size:12px;color:var(--text-muted);" data-i18n="selectFieldFirst">選擇題目後顯示</p></div>
+    </div>
+  </aside>
+
+  <!-- 右側內容 -->
+  <div class="content-area" id="contentArea">
+    <div class="empty-state">
+      <div class="icon">📋</div>
+      <p data-i18n="emptyHint">匯入 CSV 開始分析</p>
+    </div>
+  </div>
+</div>
+
+<!-- 圖表放大檢視 lightbox -->
+<div class="lightbox" id="chartLightbox" onclick="closeLightbox(event)">
+  <div class="lightbox-content" onclick="event.stopPropagation()">
+    <button class="lightbox-close" onclick="closeLightbox()" aria-label="關閉">×</button>
+    <div class="lightbox-title" id="lightboxTitle" data-i18n="chartView">圖表檢視</div>
+    <div class="lightbox-canvas-wrap"><canvas id="lightboxChart"></canvas></div>
+  </div>
+</div>
+
+<script>
+// ── 全域狀態 ──────────────────────────────────────────────────
+let rawData = [];
+let headers = [];
+let currentMode = 'simple';
+let currentChart = null;
+let currentChartType = 'bar';
+let currentTableMode = 'count';
+let customColors = {};
+
+// ── i18n 多語系 ───────────────────────────────────────────────
+const I18N = {
+  zh: {
+    appTitle: '📊 問卷分析工具',
+    noData: '尚未載入資料',
+    dataImport: '資料匯入',
+    dragHere: '拖曳 CSV 至此，或',
+    clickToSelect: '點擊選擇檔案',
+    analysisSettings: '分析設定',
+    singleAnalysis: '單題分析',
+    crossAnalysis: '交叉分析',
+    analysisField: '分析題目',
+    importFirst: '請先匯入資料',
+    xField: 'X 軸題目（列）',
+    yField: 'Y 軸題目（欄）',
+    swapXY: '對調 X/Y 軸',
+    chiHint: '交叉分析會自動執行卡方檢定',
+    chartColors: '圖表顏色',
+    theme: '主題',
+    customColors: '自訂選項顏色',
+    selectFieldFirst: '選擇題目後顯示',
+    emptyHint: '匯入 CSV 開始分析',
+    chartView: '圖表檢視',
+    rowsLoaded: n => `已載入 ${n.toLocaleString()} 筆`,
+    fieldsCount: n => `${n} 個欄位`,
+    barChart: '長條圖',
+    pieChart: '圓餅圖',
+    downloadChart: '↓ 下載圖表',
+    zoomHint: '🔍 點擊放大',
+    samplesAndVotes: (r, t) => `有效樣本 ${r.toLocaleString()} 人 · 多選總票數 ${t.toLocaleString()}`,
+    count: '計數',
+    pct: '比例',
+    both: '兩者',
+    csv: '↓ CSV',
+    option: '選項',
+    totalVotes: n => `總票數 (樣本 ${n.toLocaleString()} 人)`,
+    expand: '展開 ▼',
+    collapse: '收合 ▲',
+    subTotal: '小計',
+    chiTitle: '卡方檢定結果',
+    chiSig: '✓ 顯著差異',
+    chiNot: '△ 未達顯著',
+    chiDfP: (chi, df, p) => `χ² = <strong>${chi}</strong>　df = <strong>${df}</strong>　p = <strong>${p}</strong>`,
+    chiSigDesc: 'p < 0.05，兩個題目之間存在顯著關聯，結果具參考價值',
+    chiNotDesc: 'p ≥ 0.05，兩個題目之間尚未發現顯著關聯',
+    chooseTwoDifferent: '請選擇兩個不同的題目',
+    noEnoughDataFiltered: '過濾低頻選項後（須 ≥3 人選擇）無足夠資料進行交叉分析',
+    truncatedX: (n, m) => `X 軸共 ${n} 個選項，僅顯示前 ${m} 名；`,
+    truncatedY: (n, m) => `Y 軸共 ${n} 個選項，僅顯示前 ${m} 名；`,
+    csvParseError: 'CSV 格式錯誤或無資料',
+    tableLayoutHorizontal: '橫式',
+    tableLayoutVertical: '直式',
+    person: '人',
+  },
+  en: {
+    appTitle: '📊 Survey Analyzer',
+    noData: 'No data loaded',
+    dataImport: 'Import Data',
+    dragHere: 'Drag CSV here, or',
+    clickToSelect: 'click to select file',
+    analysisSettings: 'Analysis Settings',
+    singleAnalysis: 'Single Question',
+    crossAnalysis: 'Cross Analysis',
+    analysisField: 'Question',
+    importFirst: 'Import data first',
+    xField: 'X-axis question (rows)',
+    yField: 'Y-axis question (columns)',
+    swapXY: 'Swap X/Y',
+    chiHint: 'Cross analysis runs Chi-square test automatically',
+    chartColors: 'Chart Colors',
+    theme: 'Theme',
+    customColors: 'Custom option colors',
+    selectFieldFirst: 'Select a question first',
+    emptyHint: 'Import a CSV to begin',
+    chartView: 'Chart View',
+    rowsLoaded: n => `${n.toLocaleString()} rows loaded`,
+    fieldsCount: n => `${n} fields`,
+    barChart: 'Bar',
+    pieChart: 'Pie',
+    downloadChart: '↓ Download',
+    zoomHint: '🔍 Click to zoom',
+    samplesAndVotes: (r, t) => `${r.toLocaleString()} respondents · ${t.toLocaleString()} total votes`,
+    count: 'Count',
+    pct: 'Percent',
+    both: 'Both',
+    csv: '↓ CSV',
+    option: 'Option',
+    totalVotes: n => `Total votes (sample of ${n.toLocaleString()})`,
+    expand: 'Expand ▼',
+    collapse: 'Collapse ▲',
+    subTotal: 'Subtotal',
+    chiTitle: 'Chi-square Test Result',
+    chiSig: '✓ Significant',
+    chiNot: '△ Not significant',
+    chiDfP: (chi, df, p) => `χ² = <strong>${chi}</strong>　df = <strong>${df}</strong>　p = <strong>${p}</strong>`,
+    chiSigDesc: 'p < 0.05, the two questions are significantly associated.',
+    chiNotDesc: 'p ≥ 0.05, no significant association was found.',
+    chooseTwoDifferent: 'Please select two different questions',
+    noEnoughDataFiltered: 'After filtering low-frequency options (≥3 people required), not enough data for cross analysis',
+    truncatedX: (n, m) => `X has ${n} options, showing top ${m}; `,
+    truncatedY: (n, m) => `Y has ${n} options, showing top ${m}; `,
+    csvParseError: 'Invalid CSV format or empty file',
+    tableLayoutHorizontal: 'Horizontal',
+    tableLayoutVertical: 'Vertical',
+    person: '',
+  },
+  ja: {
+    appTitle: '📊 アンケート分析ツール',
+    noData: 'データ未読み込み',
+    dataImport: 'データ読み込み',
+    dragHere: 'CSV をドラッグ、または',
+    clickToSelect: 'ファイルを選択',
+    analysisSettings: '分析設定',
+    singleAnalysis: '単一質問',
+    crossAnalysis: 'クロス分析',
+    analysisField: '質問項目',
+    importFirst: 'データを読み込んでください',
+    xField: 'X 軸の質問（行）',
+    yField: 'Y 軸の質問（列）',
+    swapXY: 'X/Y 軸を入替',
+    chiHint: 'クロス分析ではカイ二乗検定が自動実行されます',
+    chartColors: 'グラフカラー',
+    theme: 'テーマ',
+    customColors: '個別カラー設定',
+    selectFieldFirst: '質問を選択してください',
+    emptyHint: 'CSV を読み込んで開始',
+    chartView: 'グラフ表示',
+    rowsLoaded: n => `${n.toLocaleString()} 件読み込み済`,
+    fieldsCount: n => `${n} 項目`,
+    barChart: '棒グラフ',
+    pieChart: '円グラフ',
+    downloadChart: '↓ ダウンロード',
+    zoomHint: '🔍 クリックで拡大',
+    samplesAndVotes: (r, t) => `有効回答 ${r.toLocaleString()} 名 · 総票数 ${t.toLocaleString()}`,
+    count: '件数',
+    pct: '割合',
+    both: '両方',
+    csv: '↓ CSV',
+    option: '選択肢',
+    totalVotes: n => `総票数（サンプル ${n.toLocaleString()} 名）`,
+    expand: '展開 ▼',
+    collapse: '折畳 ▲',
+    subTotal: '小計',
+    chiTitle: 'カイ二乗検定結果',
+    chiSig: '✓ 有意差あり',
+    chiNot: '△ 有意差なし',
+    chiDfP: (chi, df, p) => `χ² = <strong>${chi}</strong>　df = <strong>${df}</strong>　p = <strong>${p}</strong>`,
+    chiSigDesc: 'p < 0.05、二つの項目間に有意な関連があります。',
+    chiNotDesc: 'p ≥ 0.05、有意な関連は確認されませんでした。',
+    chooseTwoDifferent: '異なる二つの質問を選択してください',
+    noEnoughDataFiltered: '低頻度選択肢（3 名以上必要）を除外後、クロス分析に十分なデータがありません',
+    truncatedX: (n, m) => `X 軸は ${n} 項目あり、上位 ${m} 件のみ表示；`,
+    truncatedY: (n, m) => `Y 軸は ${n} 項目あり、上位 ${m} 件のみ表示；`,
+    csvParseError: 'CSV 形式が不正または空です',
+    tableLayoutHorizontal: '横',
+    tableLayoutVertical: '縦',
+    person: '名',
+  },
+  de: {
+    appTitle: '📊 Umfrage-Analyse',
+    noData: 'Keine Daten geladen',
+    dataImport: 'Daten importieren',
+    dragHere: 'CSV hierher ziehen, oder',
+    clickToSelect: 'Datei auswählen',
+    analysisSettings: 'Analyse-Einstellungen',
+    singleAnalysis: 'Einzelfrage',
+    crossAnalysis: 'Kreuzanalyse',
+    analysisField: 'Frage',
+    importFirst: 'Bitte zuerst Daten importieren',
+    xField: 'X-Achse (Zeilen)',
+    yField: 'Y-Achse (Spalten)',
+    swapXY: 'X/Y tauschen',
+    chiHint: 'Kreuzanalyse führt automatisch einen Chi-Quadrat-Test durch',
+    chartColors: 'Diagrammfarben',
+    theme: 'Thema',
+    customColors: 'Eigene Farben',
+    selectFieldFirst: 'Bitte zuerst eine Frage wählen',
+    emptyHint: 'CSV importieren, um zu beginnen',
+    chartView: 'Diagrammansicht',
+    rowsLoaded: n => `${n.toLocaleString()} Zeilen geladen`,
+    fieldsCount: n => `${n} Felder`,
+    barChart: 'Balken',
+    pieChart: 'Kreis',
+    downloadChart: '↓ Herunterladen',
+    zoomHint: '🔍 Zum Vergrößern klicken',
+    samplesAndVotes: (r, t) => `${r.toLocaleString()} Befragte · ${t.toLocaleString()} Stimmen gesamt`,
+    count: 'Anzahl',
+    pct: 'Anteil',
+    both: 'Beides',
+    csv: '↓ CSV',
+    option: 'Option',
+    totalVotes: n => `Stimmen gesamt (Stichprobe ${n.toLocaleString()})`,
+    expand: 'Mehr ▼',
+    collapse: 'Weniger ▲',
+    subTotal: 'Summe',
+    chiTitle: 'Chi-Quadrat-Test',
+    chiSig: '✓ Signifikant',
+    chiNot: '△ Nicht signifikant',
+    chiDfP: (chi, df, p) => `χ² = <strong>${chi}</strong>　df = <strong>${df}</strong>　p = <strong>${p}</strong>`,
+    chiSigDesc: 'p < 0,05 — die beiden Fragen sind signifikant assoziiert.',
+    chiNotDesc: 'p ≥ 0,05 — keine signifikante Assoziation festgestellt.',
+    chooseTwoDifferent: 'Bitte zwei unterschiedliche Fragen wählen',
+    noEnoughDataFiltered: 'Nach Filterung seltener Optionen (≥3 Personen) nicht genug Daten für Kreuzanalyse',
+    truncatedX: (n, m) => `X hat ${n} Optionen, zeige Top ${m}; `,
+    truncatedY: (n, m) => `Y hat ${n} Optionen, zeige Top ${m}; `,
+    csvParseError: 'Ungültiges CSV-Format oder leere Datei',
+    tableLayoutHorizontal: 'Horizontal',
+    tableLayoutVertical: 'Vertikal',
+    person: '',
+  },
+};
+
+let currentLang = 'zh';
+function t(key, ...args) {
+  const dict = I18N[currentLang] || I18N.zh;
+  const v = dict[key];
+  if (typeof v === 'function') return v(...args);
+  return v != null ? v : (I18N.zh[key] || key);
+}
+
+function setLang(lang) {
+  if (!I18N[lang]) return;
+  currentLang = lang;
+  try { localStorage.setItem('survey_lang', lang); } catch(e) {}
+  document.documentElement.lang = lang === 'zh' ? 'zh-TW' : lang;
+  // 套用所有靜態文字
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const key = el.getAttribute('data-i18n');
+    el.textContent = t(key);
+  });
+  // 重設下拉選擇器
+  const langSel = document.getElementById('langSelect');
+  if (langSel) langSel.value = lang;
+  // 更新動態內容（資料計數、欄位數、分析結果等）
+  updateDynamicLabels();
+  if (rawData.length) runAnalysis();
+}
+
+function updateDynamicLabels() {
+  if (rawData.length) {
+    document.getElementById('dataCount').textContent = t('rowsLoaded', rawData.length);
+    const fi = document.getElementById('fieldInfo');
+    if (fi && fi.style.display !== 'none') fi.textContent = t('fieldsCount', headers.length);
+  } else {
+    document.getElementById('dataCount').textContent = t('noData');
+  }
+}
+
+// ── 主題（dark/light） ────────────────────────────────────────
+let currentTheme_mode = 'light';
+function applyTheme(mode) {
+  currentTheme_mode = mode;
+  if (mode === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+  else document.documentElement.removeAttribute('data-theme');
+  const btn = document.getElementById('themeBtn');
+  if (btn) btn.textContent = mode === 'dark' ? '☀️' : '🌙';
+  // 同步 Chart.js 全域預設文字顏色（圖例、tooltip、軸標籤的基準色）
+  if (typeof Chart !== 'undefined' && Chart.defaults) {
+    Chart.defaults.color = mode === 'dark' ? '#cfcfd6' : '#3a3a37';
+    Chart.defaults.borderColor = mode === 'dark' ? '#2c2e38' : '#f0efe9';
+  }
+  try { localStorage.setItem('survey_theme', mode); } catch(e) {}
+  // 重繪圖表（grid 顏色會跟著變）
+  if (rawData.length) runAnalysis();
+}
+
+function toggleTheme() {
+  applyTheme(currentTheme_mode === 'dark' ? 'light' : 'dark');
+}
+
+// 取得 CSS 變數實際值（給 Chart.js 用）
+function cssVar(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+// 啟動：從 localStorage 還原語言與主題
+(function initPrefs() {
+  try {
+    const savedLang = localStorage.getItem('survey_lang');
+    if (savedLang && I18N[savedLang]) currentLang = savedLang;
+    const savedTheme = localStorage.getItem('survey_theme');
+    if (savedTheme === 'dark' || savedTheme === 'light') currentTheme_mode = savedTheme;
+    else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) currentTheme_mode = 'dark';
+  } catch(e) {}
+})();
+
+// 等 DOM 載入後套用初始設定
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('langSelect').value = currentLang;
+  setLang(currentLang); // 會套用 i18n 並重新計算
+  applyTheme(currentTheme_mode);
+});
+
+// ── 資料解析 ──────────────────────────────────────────────────
+// ── 色彩主題 ─────────────────────────────────────────────────
+const themes = [
+  { name: '商業低彩', colors: ['#2d5be3','#5b8af0','#8fb2f7','#c2d3fb','#e0eafd','#a3bcf9','#6c95f2','#4371e8'] },
+  { name: '清新自然', colors: ['#1d9e75','#5dca9e','#9fe1cb','#2d8060','#48b58a','#72c9a9','#a8dfc8','#d4efe6'] },
+  { name: '活力高彩', colors: ['#e8452f','#f5a623','#f8d200','#27ae60','#2d5be3','#9b59b6','#e91e8c','#00bcd4'] },
+  { name: '柔和漸層', colors: ['#7f77dd','#af91f0','#d4a8f8','#f0c4fb','#b3d4f7','#80c5f0','#a8e6cf','#ffd3a5'] },
+];
+let currentTheme = 0;
+
+// ── 上傳 ─────────────────────────────────────────────────────
+const uploadArea = document.getElementById('uploadArea');
+const fileInput = document.getElementById('fileInput');
+
+uploadArea.addEventListener('dragover', e => { e.preventDefault(); uploadArea.classList.add('drag'); });
+uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('drag'));
+uploadArea.addEventListener('drop', e => { e.preventDefault(); uploadArea.classList.remove('drag'); handleFile(e.dataTransfer.files[0]); });
+fileInput.addEventListener('change', () => handleFile(fileInput.files[0]));
+
+function handleFile(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => parseCSV(e.target.result);
+  reader.readAsText(file, 'UTF-8');
+}
+
+function parseCSV(text) {
+  const lines = text.trim().split(/\r?\n/);
+  if (lines.length < 2) return alert(t('csvParseError'));
+  headers = parseCSVLine(lines[0]);
+  rawData = lines.slice(1).filter(l => l.trim()).map(l => {
+    const vals = parseCSVLine(l);
+    const row = {};
+    headers.forEach((h, i) => row[h] = (vals[i] || '').trim());
+    return row;
+  });
+  document.getElementById('dataCount').textContent = t('rowsLoaded', rawData.length);
+  document.getElementById('fieldInfo').style.display = 'block';
+  document.getElementById('fieldInfo').textContent = t('fieldsCount', headers.length);
+  populateSelects();
+  renderThemeDots();
+  runAnalysis();
+}
+
+function parseCSVLine(line) {
+  const result = [];
+  let cur = '', inQ = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === '"') { inQ = !inQ; }
+    else if (c === ',' && !inQ) { result.push(cur); cur = ''; }
+    else { cur += c; }
+  }
+  result.push(cur);
+  return result;
+}
+
+function populateSelects() {
+  const opts = headers.map(h => `<option value="${h}">${h}</option>`).join('');
+  ['fieldSingle','fieldX','fieldY'].forEach(id => {
+    const el = document.getElementById(id);
+    el.innerHTML = opts;
+    el.disabled = false;
+  });
+  if (headers.length > 1) document.getElementById('fieldY').selectedIndex = 1;
+}
+
+// ── 模式切換 ─────────────────────────────────────────────────
+function setMode(mode) {
+  currentMode = mode;
+  document.getElementById('simpleFields').style.display = mode === 'simple' ? '' : 'none';
+  document.getElementById('crossFields').style.display = mode === 'cross' ? '' : 'none';
+  document.getElementById('modeSimple').classList.toggle('active', mode === 'simple');
+  document.getElementById('modeCross').classList.toggle('active', mode === 'cross');
+  runAnalysis();
+}
+
+// 對調 X/Y 軸題目
+function swapXY() {
+  const xSel = document.getElementById('fieldX');
+  const ySel = document.getElementById('fieldY');
+  if (!xSel || !ySel || xSel.disabled || ySel.disabled) return;
+  const tmp = xSel.value;
+  xSel.value = ySel.value;
+  ySel.value = tmp;
+  runAnalysis();
+}
+
+// ── 分析主流程 ────────────────────────────────────────────────
+function runAnalysis() {
+  if (!rawData.length) return;
+  if (currentMode === 'simple') runSimple();
+  else runCross();
+}
+
+function runSimple() {
+  const field = document.getElementById('fieldSingle').value;
+  if (!field) return;
+  const freq = getFreq(field);
+  const labels = Object.keys(freq);
+  const counts = Object.values(freq);
+  // 多選題：分母應為「有效填答的受訪者人數」（該欄位非空的人數），而非勾選次數總和
+  // 這樣比例才會反映「有多少比例的人選擇此選項」
+  const respondents = rawData.filter(r => splitOptions(r[field]).length > 0).length;
+  updateColorEditor(labels, field);
+  const colors = getColors(labels, field);
+  renderChart(labels, counts, colors, field, respondents);
+  renderSimpleTable(labels, counts, respondents);
+  hideStats();
+}
+
+function runCross() {
+  const fx = document.getElementById('fieldX').value;
+  const fy = document.getElementById('fieldY').value;
+  if (!fx || !fy || fx === fy) {
+    document.getElementById('contentArea').innerHTML = `<div class="empty-state"><div class="icon">⚠️</div><p>${t('chooseTwoDifferent')}</p></div>`;
+    return;
+  }
+
+  // 計算各選項出現次數（先用逗號拆分多選答案）
+  // 過濾條件：選項至少要被 3 個人以上選擇才會被統計（排除「其他」自填內容）
+  const xFreq = {}, yFreq = {};
+  rawData.forEach(r => {
+    splitOptions(r[fx]).forEach(opt => { xFreq[opt] = (xFreq[opt] || 0) + 1; });
+    splitOptions(r[fy]).forEach(opt => { yFreq[opt] = (yFreq[opt] || 0) + 1; });
+  });
+  let xVals = Object.keys(xFreq).filter(v => xFreq[v] > 2);
+  let yVals = Object.keys(yFreq).filter(v => yFreq[v] > 2);
+  // 依出現次數由多到少排序（高頻選項在前，提升可讀性）
+  xVals.sort((a, b) => xFreq[b] - xFreq[a]);
+  yVals.sort((a, b) => yFreq[b] - yFreq[a]);
+
+  if (!xVals.length || !yVals.length) {
+    document.getElementById('contentArea').innerHTML = `<div class="empty-state"><div class="icon">⚠️</div><p>${t('noEnoughDataFiltered')}</p></div>`;
+    return;
+  }
+
+  // 效能保護：選項數過多會讓 Chart.js 卡頓，限制最多顯示前 N 名
+  const MAX_OPTIONS = 20;
+  let truncatedNote = '';
+  if (xVals.length > MAX_OPTIONS) {
+    truncatedNote += t('truncatedX', xVals.length, MAX_OPTIONS);
+    xVals = xVals.slice(0, MAX_OPTIONS);
+  }
+  if (yVals.length > MAX_OPTIONS) {
+    truncatedNote += t('truncatedY', yVals.length, MAX_OPTIONS);
+    yVals = yVals.slice(0, MAX_OPTIONS);
+  }
+
+  // 建立交叉表：對於同一筆資料，X 的每個選項 × Y 的每個選項都各自累計一次
+  // 例如某人在 X 選了「A, B」、Y 選了「甲, 乙」，則 (A,甲)(A,乙)(B,甲)(B,乙) 各 +1
+  const matrix = {};
+  xVals.forEach(x => { matrix[x] = {}; yVals.forEach(y => matrix[x][y] = 0); });
+  rawData.forEach(r => {
+    const xs = splitOptions(r[fx]);
+    const ys = splitOptions(r[fy]);
+    xs.forEach(x => {
+      if (!matrix[x]) return;
+      ys.forEach(y => {
+        if (matrix[x][y] !== undefined) matrix[x][y]++;
+      });
+    });
+  });
+  updateColorEditor(xVals, fx);
+  const colors = getColors(xVals, fx);
+  renderCrossChart(xVals, yVals, matrix, colors, fx, fy, truncatedNote);
+  renderCrossTable(xVals, yVals, matrix, fx, fy);
+  renderChiSquare(xVals, yVals, matrix);
+}
+
+// ── 頻率統計 ─────────────────────────────────────────────────
+// 將儲存格內容用逗號拆分成多個選項（支援中英文逗號）
+// 例如 "進場時打招呼, 與主播互動, 搞笑、引起注意" 會拆成三個選項
+function splitOptions(value) {
+  if (!value) return [];
+  return value.split(/[,，]/).map(s => s.trim()).filter(s => s.length > 0);
+}
+
+function getFreq(field) {
+  const freq = {};
+  rawData.forEach(r => {
+    const opts = splitOptions(r[field]);
+    opts.forEach(opt => { freq[opt] = (freq[opt] || 0) + 1; });
+  });
+  // 過濾掉出現次數 <= 2 的選項（通常為「其他」自填內容）
+  // 規則：選項至少要被 3 個人以上選擇才會被統計
+  const filtered = Object.fromEntries(Object.entries(freq).filter(([, cnt]) => cnt > 2));
+  return Object.fromEntries(Object.entries(filtered).sort((a, b) => b[1] - a[1]));
+}
+
+// ── 顏色系統 ─────────────────────────────────────────────────
+function getColors(labels, field) {
+  const palette = themes[currentTheme].colors;
+  return labels.map((l, i) => customColors[field + '__' + l] || palette[i % palette.length]);
+}
+
+function renderThemeDots() {
+  const el = document.getElementById('themeDots');
+  el.innerHTML = themes.map((t, i) =>
+    `<div class="theme-dot${i === currentTheme ? ' active' : ''}" style="background:${t.colors[0]}" title="${t.name}" onclick="setTheme(${i})"></div>`
+  ).join('');
+}
+
+function setTheme(i) {
+  currentTheme = i;
+  customColors = {};
+  renderThemeDots();
+  const field = currentMode === 'simple' ? document.getElementById('fieldSingle').value : document.getElementById('fieldX').value;
+  if (field) { const freq = getFreq(field); updateColorEditor(Object.keys(freq), field); }
+  runAnalysis();
+}
+
+function updateColorEditor(labels, field) {
+  const colors = themes[currentTheme].colors;
+  document.getElementById('colorEditor').innerHTML = labels.slice(0, 12).map((l, i) => {
+    const key = field + '__' + l;
+    const col = customColors[key] || colors[i % colors.length];
+    return `<div class="color-row"><label title="${l}">${l.length > 14 ? l.slice(0,14)+'…' : l}</label><input type="color" value="${col}" onchange="setCustomColor('${key}', this.value)"></div>`;
+  }).join('');
+}
+
+function setCustomColor(key, val) {
+  customColors[key] = val;
+  runAnalysis();
+}
+
+// ── 圖表渲染 ─────────────────────────────────────────────────
+function renderChart(labels, counts, colors, title, respondents) {
+  const area = document.getElementById('contentArea');
+  area.innerHTML = `
+    <div class="toolbar">
+      <div class="toolbar-left">
+        <div class="chart-type-toggle">
+          <button class="ct-btn${currentChartType==='bar'?' active':''}" onclick="setChartType('bar')">${t('barChart')}</button>
+          <button class="ct-btn${currentChartType==='pie'?' active':''}" onclick="setChartType('pie')">${t('pieChart')}</button>
+        </div>
+        <span style="font-size:12px;color:var(--text-muted);">${t('samplesAndVotes', respondents, counts.reduce((a,b)=>a+b,0))}</span>
+      </div>
+      <div class="toolbar-right">
+        <button class="btn btn-sm" onclick="downloadChart()">${t('downloadChart')}</button>
+      </div>
+    </div>
+    <div class="chart-wrap">
+      <div class="chart-container" id="chartContainer" onclick="openLightbox()">
+        <span class="chart-zoom-hint">${t('zoomHint')}</span>
+        <canvas id="mainChart"></canvas>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <div class="table-toolbar">
+        <span style="font-size:13px;font-weight:500;">${escapeHtml(title)}</span>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <div class="table-mode">
+            <button class="tm-btn${currentTableMode==='count'?' active':''}" onclick="setTableMode('count')">${t('count')}</button>
+            <button class="tm-btn${currentTableMode==='pct'?' active':''}" onclick="setTableMode('pct')">${t('pct')}</button>
+            <button class="tm-btn${currentTableMode==='both'?' active':''}" onclick="setTableMode('both')">${t('both')}</button>
+          </div>
+          <button class="btn btn-sm" onclick="downloadTableCSV()">${t('csv')}</button>
+        </div>
+      </div>
+      <div class="table-scroll" id="tableContainer"></div>
+    </div>
+  `;
+  window._simpleLabels = labels;
+  window._simpleCounts = counts;
+  window._simpleColors = colors;
+  window._simpleTitle = title;
+  window._simpleRespondents = respondents;
+  // 動態高度：項目多時加高（垂直長條圖每項約需 28px）
+  applyDynamicChartHeight('chartContainer', labels.length, currentChartType);
+  drawSimpleChart(labels, counts, colors, respondents);
+  drawSimpleTableContent(labels, counts, respondents);
+}
+
+// 判斷長條圖方向：手機端超過 5 項、或一般情況超過 8 項，或標籤過長 → 改水平
+function shouldUseHorizontal(labelCount, labels) {
+  const isMobile = window.innerWidth <= 768;
+  const threshold = isMobile ? 5 : 8;
+  if (labelCount > threshold) return true;
+  // 標籤過長也採用水平方向（垂直長條圖文字不會擠在一起）
+  const longLabel = labels && labels.some(l => String(l).length > 8);
+  if (isMobile && longLabel) return true;
+  return false;
+}
+
+// 動態調整圖表容器高度：水平長條圖項目越多越高
+function applyDynamicChartHeight(containerId, itemCount, chartType) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  if (chartType === 'pie') {
+    el.style.height = window.innerWidth <= 768 ? '280px' : '340px';
+    return;
+  }
+  const horizontal = shouldUseHorizontal(itemCount);
+  if (horizontal) {
+    // 水平長條圖：每項約 32-36px + 上下 padding
+    const perItem = window.innerWidth <= 480 ? 30 : 34;
+    const minH = window.innerWidth <= 768 ? 240 : 280;
+    el.style.height = Math.max(minH, itemCount * perItem + 60) + 'px';
+  } else {
+    el.style.height = window.innerWidth <= 768 ? '260px' : '340px';
+  }
+}
+
+function drawSimpleChart(labels, counts, colors, respondents) {
+  if (currentChart) currentChart.destroy();
+  const ctx = document.getElementById('mainChart').getContext('2d');
+  const isPie = currentChartType === 'pie';
+  // 多選題：以受訪者人數為分母計算比例（會超過 100%，因為一個人可選多項）
+  const denom = respondents || counts.reduce((a, b) => a + b, 0) || 1;
+  const horizontal = !isPie && shouldUseHorizontal(labels.length, labels);
+  const isMobile = window.innerWidth <= 768;
+  currentChart = new Chart(ctx, {
+    type: isPie ? 'pie' : 'bar',
+    data: {
+      labels,
+      datasets: [{
+        data: counts,
+        backgroundColor: colors.map(c => c + (isPie ? 'ee' : 'cc')),
+        borderColor: colors,
+        borderWidth: isPie ? 2 : 0,
+        borderRadius: isPie ? 0 : 5,
+      }]
+    },
+    options: {
+      indexAxis: horizontal ? 'y' : 'x',
+      responsive: true, maintainAspectRatio: false,
+      layout: { padding: isMobile ? 4 : 8 },
+      plugins: {
+        legend: { display: isPie, position: isMobile ? 'bottom' : 'right', labels: { font: { size: isMobile ? 11 : 12 }, padding: isMobile ? 8 : 14, boxWidth: 12 } },
+        tooltip: { callbacks: { label: ctx => ` ${ctx.raw} 人 (${(ctx.raw/denom*100).toFixed(1)}%)` } }
+      },
+      scales: isPie ? {} : (horizontal ? {
+        x: { grid: { color: cssVar('--grid-line') }, ticks: { font: { size: isMobile ? 11 : 12 } }, beginAtZero: true },
+        y: { grid: { display: false }, ticks: { font: { size: isMobile ? 11 : 12 }, autoSkip: false, callback: function(v) { const lbl = this.getLabelForValue(v); return lbl.length > 14 ? lbl.slice(0, 14) + '…' : lbl; } } }
+      } : {
+        x: { grid: { display: false }, ticks: { font: { size: isMobile ? 11 : 12 }, callback: function(v) { const lbl = this.getLabelForValue(v); return lbl.length > 8 ? lbl.slice(0, 8) + '…' : lbl; } } },
+        y: { grid: { color: cssVar('--grid-line') }, ticks: { font: { size: isMobile ? 11 : 12 } }, beginAtZero: true }
+      })
+    }
+  });
+}
+
+function renderCrossChart(xVals, yVals, matrix, colors, fx, fy, truncatedNote) {
+  const area = document.getElementById('contentArea');
+  const noteHtml = truncatedNote ? `<span style="font-size:12px;color:var(--warn-text);">⚠ ${truncatedNote}</span>` : '';
+  area.innerHTML = `
+    <div class="toolbar">
+      <div class="toolbar-left">
+        <div class="chart-type-toggle">
+          <button class="ct-btn${currentChartType==='bar'?' active':''}" onclick="setChartType('bar')">${t('barChart')}</button>
+          <button class="ct-btn${currentChartType==='pie'?' active':''}" onclick="setChartType('pie')">${t('pieChart')}</button>
+        </div>
+        ${noteHtml}
+      </div>
+      <div class="toolbar-right">
+        <button class="btn btn-sm" onclick="downloadChart()">${t('downloadChart')}</button>
+      </div>
+    </div>
+    <div class="chart-wrap">
+      <div class="chart-container" id="chartContainer" onclick="openLightbox()">
+        <span class="chart-zoom-hint">${t('zoomHint')}</span>
+        <canvas id="mainChart"></canvas>
+      </div>
+    </div>
+    <div class="table-wrap" id="crossTableWrap"></div>
+    <div class="stats-panel" id="statsPanel"></div>
+  `;
+  window._crossData = { xVals, yVals, matrix, colors, fx, fy, truncatedNote };
+  applyDynamicChartHeight('chartContainer', xVals.length, currentChartType);
+  drawCrossChart(xVals, yVals, matrix, colors, fy);
+}
+
+function drawCrossChart(xVals, yVals, matrix, colors, fy) {
+  if (currentChart) currentChart.destroy();
+  const ctx = document.getElementById('mainChart').getContext('2d');
+  const isPie = currentChartType === 'pie';
+  const isMobile = window.innerWidth <= 768;
+
+  if (isPie) {
+    // 圓餅圖：顯示 X 軸各選項的總計分佈
+    const totals = xVals.map(x => yVals.reduce((s, y) => s + (matrix[x][y] || 0), 0));
+    currentChart = new Chart(ctx, {
+      type: 'pie',
+      data: {
+        labels: xVals,
+        datasets: [{
+          data: totals,
+          backgroundColor: colors.map(c => c + 'ee'),
+          borderColor: colors,
+          borderWidth: 2
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        layout: { padding: isMobile ? 4 : 8 },
+        plugins: {
+          legend: { position: isMobile ? 'bottom' : 'right', labels: { font: { size: isMobile ? 11 : 12 }, padding: isMobile ? 8 : 14, boxWidth: 12 } },
+          tooltip: {
+            callbacks: {
+              label: item => {
+                const total = totals.reduce((a, b) => a + b, 0);
+                return ` ${item.label}: ${item.raw} (${total ? (item.raw/total*100).toFixed(1) : 0}%)`;
+              }
+            }
+          }
+        }
+      }
+    });
+  } else {
+    // 分組長條圖：X 軸 = xVals（X 題目選項），每個 dataset = yVals（Y 題目的一個選項）
+    const themeColors = themes[currentTheme].colors;
+    const horizontal = shouldUseHorizontal(xVals.length, xVals);
+    const datasets = yVals.map((y, i) => ({
+      label: y,
+      data: xVals.map(x => matrix[x][y] || 0),
+      backgroundColor: themeColors[i % themeColors.length] + 'cc',
+      borderColor: themeColors[i % themeColors.length],
+      borderWidth: 0,
+      borderRadius: 4,
+    }));
+    currentChart = new Chart(ctx, {
+      type: 'bar',
+      data: { labels: xVals, datasets },
+      options: {
+        indexAxis: horizontal ? 'y' : 'x',
+        responsive: true, maintainAspectRatio: false,
+        layout: { padding: isMobile ? 4 : 8 },
+        plugins: {
+          legend: { position: isMobile ? 'bottom' : 'top', labels: { font: { size: isMobile ? 10 : 11 }, padding: isMobile ? 8 : 10, boxWidth: 12 } },
+          tooltip: {
+            callbacks: {
+              label: item => {
+                const colTotal = xVals.map(x => yVals.reduce((s, y) => s + (matrix[x][y] || 0), 0));
+                const idx = horizontal ? item.dataIndex : item.dataIndex;
+                const pct = colTotal[idx] ? (item.raw / colTotal[idx] * 100).toFixed(1) : 0;
+                return ` ${item.dataset.label}: ${item.raw} (${pct}%)`;
+              }
+            }
+          }
+        },
+        scales: horizontal ? {
+          x: { grid: { color: cssVar('--grid-line') }, beginAtZero: true, ticks: { font: { size: isMobile ? 10 : 11 } } },
+          y: { grid: { display: false }, ticks: { font: { size: isMobile ? 10 : 11 }, autoSkip: false, callback: function(v) { const lbl = this.getLabelForValue(v); return lbl.length > 14 ? lbl.slice(0, 14) + '…' : lbl; } } }
+        } : {
+          x: { grid: { display: false }, ticks: { font: { size: isMobile ? 10 : 11 }, callback: function(v) { const lbl = this.getLabelForValue(v); return lbl.length > 8 ? lbl.slice(0, 8) + '…' : lbl; } } },
+          y: { grid: { color: cssVar('--grid-line') }, beginAtZero: true, ticks: { font: { size: isMobile ? 10 : 11 } } }
+        }
+      }
+    });
+  }
+}
+
+function setChartType(type) {
+  currentChartType = type;
+  if (currentMode === 'simple') {
+    const l = window._simpleLabels, c = window._simpleCounts, col = window._simpleColors, t = window._simpleTitle, r = window._simpleRespondents;
+    if (l) {
+      applyDynamicChartHeight('chartContainer', l.length, type);
+      drawSimpleChart(l, c, col, r);
+      document.querySelectorAll('.ct-btn').forEach(b => b.classList.toggle('active', b.textContent.includes(type==='bar'?'長條':'圓')));
+    }
+  } else {
+    const d = window._crossData;
+    if (d) {
+      applyDynamicChartHeight('chartContainer', d.xVals.length, type);
+      drawCrossChart(d.xVals, d.yVals, d.matrix, d.colors, d.fy);
+      document.querySelectorAll('.ct-btn').forEach(b => b.classList.toggle('active', b.textContent.includes(type==='bar'?'長條':'圓')));
+    }
+  }
+}
+
+// ── 表格渲染 ─────────────────────────────────────────────────
+function setTableMode(mode) {
+  currentTableMode = mode;
+  document.querySelectorAll('.tm-btn').forEach(b => {
+    b.classList.toggle('active', (mode==='count'&&b.textContent==='計數')||(mode==='pct'&&b.textContent==='比例')||(mode==='both'&&b.textContent==='兩者'));
+  });
+  if (window._simpleLabels && currentMode === 'simple') drawSimpleTableContent(window._simpleLabels, window._simpleCounts, window._simpleRespondents);
+  else if (window._crossData) renderCrossTable(window._crossData.xVals, window._crossData.yVals, window._crossData.matrix, window._crossData.fx, window._crossData.fy);
+}
+
+// 長文字標籤渲染：超過 LABEL_LIMIT 字會收合，可點擊展開
+const LABEL_LIMIT = 24;
+let _labelExpandedSet = new Set();
+
+function renderLabelCell(label, extraStyle) {
+  const safe = String(label);
+  const id = 'lbl_' + Math.abs(hashStr(safe)).toString(36);
+  const isLong = safe.length > LABEL_LIMIT;
+  const style = extraStyle || '';
+  if (!isLong) return `<td class="label-cell" style="${style}">${escapeHtml(safe)}</td>`;
+  const expanded = _labelExpandedSet.has(id);
+  return `<td class="label-cell" style="${style}">
+    <span class="label-text${expanded ? '' : ' collapsed'}" id="${id}">${escapeHtml(safe)}</span>
+    <button type="button" class="label-toggle" onclick="toggleLabel('${id}')">${expanded ? '收合 ▲' : '展開 ▼'}</button>
+  </td>`;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+}
+
+function hashStr(s) {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) { h = ((h << 5) - h) + s.charCodeAt(i); h |= 0; }
+  return h;
+}
+
+function toggleLabel(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const isCollapsed = el.classList.contains('collapsed');
+  if (isCollapsed) { el.classList.remove('collapsed'); _labelExpandedSet.add(id); }
+  else { el.classList.add('collapsed'); _labelExpandedSet.delete(id); }
+  // 更新按鈕文字
+  const btn = el.parentElement.querySelector('.label-toggle');
+  if (btn) btn.textContent = isCollapsed ? '收合 ▲' : '展開 ▼';
+}
+
+function drawSimpleTableContent(labels, counts, respondents) {
+  const totalChecks = counts.reduce((a, b) => a + b, 0);
+  // 多選題比例分母 = 受訪者人數，因此各選項比例加總可能 > 100%
+  const denom = respondents || totalChecks || 1;
+  window._simpleLabels = labels; window._simpleCounts = counts;
+  if (respondents !== undefined) window._simpleRespondents = respondents;
+  let rows = labels.map((l, i) => {
+    const pct = (counts[i]/denom*100).toFixed(1);
+    const labelTd = renderLabelCell(l);
+    if (currentTableMode === 'count') return `<tr>${labelTd}<td class="td-num">${counts[i].toLocaleString()}</td></tr>`;
+    if (currentTableMode === 'pct') return `<tr>${labelTd}<td class="td-num td-pct">${pct}%</td></tr>`;
+    return `<tr>${labelTd}<td class="td-num">${counts[i].toLocaleString()}</td><td class="td-num td-pct">${pct}%</td></tr>`;
+  }).join('');
+  const hdr = currentTableMode === 'count' ? `<th>${t('count')}</th>` : currentTableMode === 'pct' ? `<th>${t('pct')}</th>` : `<th>${t('count')}</th><th>${t('pct')}</th>`;
+  const totalPct = (totalChecks/denom*100).toFixed(1);
+  const totalLabel = t('totalVotes', denom);
+  const totalRow = currentTableMode === 'count'
+    ? `<td class="td-num td-total">${totalChecks.toLocaleString()}</td>`
+    : currentTableMode === 'pct'
+      ? `<td class="td-num td-total">${totalPct}%</td>`
+      : `<td class="td-num td-total">${totalChecks.toLocaleString()}</td><td class="td-num td-total">${totalPct}%</td>`;
+  document.getElementById('tableContainer').innerHTML = `<table><thead><tr><th>${t('option')}</th>${hdr}</tr></thead><tbody>${rows}<tr class="td-total"><td style="font-weight:600;">${totalLabel}</td>${totalRow}</tr></tbody></table>`;
+}
+
+function renderSimpleTable(labels, counts, respondents) {
+  drawSimpleTableContent(labels, counts, respondents);
+}
+
+// 交叉表的版面模式：'horizontal' = 傳統二維表，'vertical' = 每個 X 一個區塊
+let currentTableLayout = 'auto';
+
+function getEffectiveTableLayout(yCount) {
+  if (currentTableLayout === 'horizontal') return 'horizontal';
+  if (currentTableLayout === 'vertical') return 'vertical';
+  // auto 模式：手機端 yCount > 3 或 桌面端 yCount > 8 自動轉直式
+  const isMobile = window.innerWidth <= 768;
+  if (isMobile && yCount > 3) return 'vertical';
+  if (!isMobile && yCount > 8) return 'vertical';
+  return 'horizontal';
+}
+
+function setTableLayout(layout) {
+  currentTableLayout = layout;
+  if (window._crossData) renderCrossTable(window._crossData.xVals, window._crossData.yVals, window._crossData.matrix, window._crossData.fx, window._crossData.fy);
+}
+
+function renderCrossTable(xVals, yVals, matrix, fx, fy) {
+  const wrap = document.getElementById('crossTableWrap');
+  if (!wrap) return;
+  const grandTotal = xVals.reduce((s, x) => s + yVals.reduce((s2, y) => s2 + matrix[x][y], 0), 0);
+  const rowTotals = xVals.map(x => yVals.reduce((s, y) => s + matrix[x][y], 0));
+  const colTotals = yVals.map(y => xVals.reduce((s, x) => s + matrix[x][y], 0));
+  const layout = getEffectiveTableLayout(yVals.length);
+
+  // 共用工具列（含水平/垂直切換）
+  const toolbarHtml = `
+    <div class="table-toolbar">
+      <span style="font-size:13px;font-weight:500;">${escapeHtml(fx)} × ${escapeHtml(fy)}</span>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <div class="table-layout-toggle" title="${escapeHtml(t('tableLayoutHorizontal'))} / ${escapeHtml(t('tableLayoutVertical'))}">
+          <button class="tl-btn${layout==='horizontal'?' active':''}" onclick="setTableLayout('horizontal')">⇆ ${t('tableLayoutHorizontal')}</button>
+          <button class="tl-btn${layout==='vertical'?' active':''}" onclick="setTableLayout('vertical')">⇅ ${t('tableLayoutVertical')}</button>
+        </div>
+        <div class="table-mode">
+          <button class="tm-btn${currentTableMode==='count'?' active':''}" onclick="setTableMode('count')">${t('count')}</button>
+          <button class="tm-btn${currentTableMode==='pct'?' active':''}" onclick="setTableMode('pct')">${t('pct')}</button>
+          <button class="tm-btn${currentTableMode==='both'?' active':''}" onclick="setTableMode('both')">${t('both')}</button>
+        </div>
+        <button class="btn btn-sm" onclick="downloadTableCSV()">${t('csv')}</button>
+      </div>
+    </div>`;
+
+  if (layout === 'vertical') {
+    // 垂直堆疊：每個 X 選項一個卡片區塊，內含所有 Y 子項
+    const groups = xVals.map((x, i) => {
+      const rt = rowTotals[i];
+      const subRows = yVals.map(y => {
+        const n = matrix[x][y] || 0;
+        const pct = grandTotal ? (n/grandTotal*100).toFixed(1) : '0.0';
+        let valHtml;
+        if (currentTableMode === 'count') valHtml = `${n.toLocaleString()}`;
+        else if (currentTableMode === 'pct') valHtml = `<span class="pct">${pct}%</span>`;
+        else valHtml = `${n.toLocaleString()}<span class="pct">${pct}%</span>`;
+        return `<div class="cross-sub-row"><span class="cross-sub-label">${escapeHtml(String(y))}</span><span class="cross-sub-val">${valHtml}</span></div>`;
+      }).join('');
+      const totalText = currentTableMode === 'pct'
+        ? `${grandTotal ? (rt/grandTotal*100).toFixed(1) : '0.0'}%`
+        : `${rt.toLocaleString()}${currentTableMode==='both' ? ` (${grandTotal?(rt/grandTotal*100).toFixed(1):'0.0'}%)` : ''}`;
+      return `<div class="cross-group">
+        <div class="cross-group-header">
+          <span class="cross-group-title">${escapeHtml(String(x))}</span>
+          <span class="cross-group-total">${t('subTotal')}: ${totalText}</span>
+        </div>
+        ${subRows}
+      </div>`;
+    }).join('');
+    wrap.innerHTML = toolbarHtml + `<div class="cross-vertical">${groups}</div>`;
+    return;
+  }
+
+  // 水平模式：傳統二維表
+  const cell = (n, total) => {
+    const pct = total ? (n/total*100).toFixed(1) : '0.0';
+    if (currentTableMode === 'count') return `<td class="td-num">${n}</td>`;
+    if (currentTableMode === 'pct') return `<td class="td-num td-pct">${pct}%</td>`;
+    return `<td class="td-num">${n}<br><span class="td-pct" style="font-size:11px;">${pct}%</span></td>`;
+  };
+
+  const rows = xVals.map((x, i) =>
+    `<tr>${renderLabelCell(x, 'font-weight:500;')}${yVals.map(y => cell(matrix[x][y], grandTotal)).join('')}${cell(rowTotals[i], grandTotal)}</tr>`
+  ).join('');
+
+  const yHeaderHtml = yVals.map(y => {
+    const safe = escapeHtml(String(y));
+    const display = String(y).length > 12 ? safe.slice(0, 12) + '…' : safe;
+    return `<th title="${safe}">${display}</th>`;
+  }).join('');
+
+  wrap.innerHTML = toolbarHtml + `
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>${escapeHtml(fx)} \\ ${escapeHtml(fy)}</th>${yHeaderHtml}<th>${t('subTotal')}</th></tr></thead>
+        <tbody>${rows}
+          <tr class="td-total"><td style="font-weight:600;">${t('subTotal')}</td>${colTotals.map(tt=>cell(tt,grandTotal)).join('')}${cell(grandTotal,grandTotal)}</tr>
+        </tbody>
+      </table>
+    </div>`;
+}
+
+function hideStats() {
+  const s = document.getElementById('statsPanel');
+  if (s) s.remove();
+}
+
+// ── 卡方檢定 ─────────────────────────────────────────────────
+function renderChiSquare(xVals, yVals, matrix) {
+  const panel = document.getElementById('statsPanel');
+  if (!panel) return;
+  const observed = xVals.map(x => yVals.map(y => matrix[x][y]));
+  const rowTotals = observed.map(row => row.reduce((a, b) => a + b, 0));
+  const colTotals = yVals.map((_, j) => xVals.reduce((s, _, i) => s + observed[i][j], 0));
+  const grand = rowTotals.reduce((a, b) => a + b, 0);
+  if (grand === 0) return;
+  let chi2 = 0;
+  observed.forEach((row, i) => row.forEach((o, j) => {
+    const e = rowTotals[i] * colTotals[j] / grand;
+    if (e > 0) chi2 += Math.pow(o - e, 2) / e;
+  }));
+  const df = (xVals.length - 1) * (yVals.length - 1);
+  const p = chiSquarePValue(chi2, df);
+  const sig = p < 0.05;
+  panel.innerHTML = `
+    <p class="panel-title">${t('chiTitle')}</p>
+    <div class="chi-result">
+      <span class="chi-badge ${sig ? 'chi-sig' : 'chi-not'}">${sig ? t('chiSig') : t('chiNot')}</span>
+      <div class="chi-detail">
+        ${t('chiDfP', chi2.toFixed(3), df, p < 0.001 ? '< 0.001' : p.toFixed(3))}
+        <br><span style="font-size:12px;">${sig ? t('chiSigDesc') : t('chiNotDesc')}</span>
+      </div>
+    </div>`;
+}
+
+function chiSquarePValue(chi2, df) {
+  if (df <= 0) return 1;
+  return 1 - incompletGamma(df / 2, chi2 / 2);
+}
+
+function incompletGamma(a, x) {
+  if (x < 0) return 0;
+  if (x === 0) return 0;
+  let sum = 1 / a, term = 1 / a;
+  for (let i = 1; i < 200; i++) {
+    term *= x / (a + i);
+    sum += term;
+    if (Math.abs(term) < 1e-10) break;
+  }
+  return Math.min(1, sum * Math.exp(-x + a * Math.log(x) - logGamma(a)));
+}
+
+function logGamma(z) {
+  const c = [76.18009172947146,-86.50532032941677,24.01409824083091,-1.231739572450155,0.1208650973866179e-2,-0.5395239384953e-5];
+  let y = z, x = z, tmp = x + 5.5;
+  tmp -= (x + 0.5) * Math.log(tmp);
+  let ser = 1.000000000190015;
+  c.forEach((ci, j) => { y++; ser += ci / y; });
+  return -tmp + Math.log(2.5066282746310005 * ser / x);
+}
+
+// ── 下載 ─────────────────────────────────────────────────────
+function downloadChart() {
+  const canvas = document.getElementById('mainChart');
+  if (!canvas) return;
+  const tmp = document.createElement('canvas');
+  tmp.width = canvas.width; tmp.height = canvas.height;
+  const ctx = tmp.getContext('2d');
+  // 下載圖片時背景色跟隨當前主題（dark 模式下存白底會看不到文字）
+  ctx.fillStyle = currentTheme_mode === 'dark' ? '#1f2027' : '#ffffff';
+  ctx.fillRect(0, 0, tmp.width, tmp.height);
+  ctx.drawImage(canvas, 0, 0);
+  const a = document.createElement('a');
+  a.href = tmp.toDataURL('image/png');
+  a.download = 'chart.png';
+  a.click();
+}
+
+function downloadTableCSV() {
+  let csv = '';
+  if (currentMode === 'simple' && window._simpleLabels) {
+    const denom = window._simpleRespondents || window._simpleCounts.reduce((a, b) => a + b, 0) || 1;
+    csv = `${t('option')},${t('count')},${t('pct')}\n` + window._simpleLabels.map((l, i) => {
+      return `"${String(l).replace(/"/g,'""')}",${window._simpleCounts[i]},${(window._simpleCounts[i]/denom*100).toFixed(1)}%`;
+    }).join('\n');
+  } else if (window._crossData) {
+    const { xVals, yVals, matrix } = window._crossData;
+    const esc = s => `"${String(s).replace(/"/g,'""')}"`;
+    csv = ['', ...yVals.map(esc), t('subTotal')].join(',') + '\n';
+    csv += xVals.map(x => {
+      const rt = yVals.reduce((s, y) => s + matrix[x][y], 0);
+      return esc(x) + ',' + yVals.map(y => matrix[x][y]).join(',') + `,${rt}`;
+    }).join('\n');
+    const colTotals = yVals.map(y => xVals.reduce((s, x) => s + matrix[x][y], 0));
+    csv += '\n' + t('subTotal') + ',' + colTotals.join(',') + ',' + colTotals.reduce((a,b)=>a+b,0);
+  }
+  if (!csv) return;
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'table.csv';
+  a.click();
+}
+
+// ── 圖表放大檢視 ─────────────────────────────────────────────
+let lightboxChart = null;
+
+function openLightbox() {
+  if (!currentChart) return;
+  const lb = document.getElementById('chartLightbox');
+  // 設定標題
+  const title = currentMode === 'simple'
+    ? (window._simpleTitle || '圖表檢視')
+    : (window._crossData ? `${window._crossData.fx} × ${window._crossData.fy}` : '圖表檢視');
+  document.getElementById('lightboxTitle').textContent = title;
+
+  lb.classList.add('show');
+  document.body.style.overflow = 'hidden';
+
+  // 用 requestAnimationFrame 確保 DOM 渲染後再建圖（容器尺寸才正確）
+  requestAnimationFrame(() => {
+    if (lightboxChart) lightboxChart.destroy();
+    const ctx = document.getElementById('lightboxChart').getContext('2d');
+    // 複製主圖表的設定到 lightbox 中，但放大字體與 padding
+    const cfg = JSON.parse(JSON.stringify({
+      type: currentChart.config.type,
+      data: currentChart.config.data,
+      options: currentChart.config.options
+    }));
+    // lightbox 中放大字體
+    if (cfg.options.plugins && cfg.options.plugins.legend && cfg.options.plugins.legend.labels) {
+      cfg.options.plugins.legend.labels.font = { size: 13 };
+      cfg.options.plugins.legend.labels.padding = 14;
+    }
+    if (cfg.options.scales) {
+      Object.values(cfg.options.scales).forEach(s => {
+        if (s.ticks) { s.ticks.font = { size: 13 }; }
+      });
+    }
+    // 還原 tooltip callback（JSON.stringify 會掉 function）
+    cfg.options.plugins = cfg.options.plugins || {};
+    cfg.options.plugins.tooltip = currentChart.config.options.plugins.tooltip;
+    // 還原 ticks callback（autoSkip 與截斷標籤用）
+    if (currentChart.config.options.scales && cfg.options.scales) {
+      Object.keys(cfg.options.scales).forEach(k => {
+        const orig = currentChart.config.options.scales[k];
+        if (orig && orig.ticks && orig.ticks.callback) {
+          cfg.options.scales[k].ticks.callback = orig.ticks.callback;
+          cfg.options.scales[k].ticks.autoSkip = false;
+        }
+      });
+    }
+    cfg.options.maintainAspectRatio = false;
+    lightboxChart = new Chart(ctx, cfg);
+  });
+}
+
+function closeLightbox(event) {
+  if (event && event.target.id !== 'chartLightbox' && !event.target.classList.contains('lightbox-close')) return;
+  document.getElementById('chartLightbox').classList.remove('show');
+  document.body.style.overflow = '';
+  if (lightboxChart) { lightboxChart.destroy(); lightboxChart = null; }
+}
+
+// ESC 關閉 lightbox
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeLightbox({ target: { id: 'chartLightbox' } });
+});
+
+// ── 視窗大小變化時重繪圖表（RWD 動態切換水平/垂直） ───────────
+let _resizeTimer = null;
+window.addEventListener('resize', () => {
+  if (_resizeTimer) clearTimeout(_resizeTimer);
+  _resizeTimer = setTimeout(() => {
+    if (!rawData.length) return;
+    // 只重繪圖表，不重建整個 DOM（保留使用者展開狀態）
+    if (currentMode === 'simple' && window._simpleLabels) {
+      applyDynamicChartHeight('chartContainer', window._simpleLabels.length, currentChartType);
+      drawSimpleChart(window._simpleLabels, window._simpleCounts, window._simpleColors, window._simpleRespondents);
+    } else if (currentMode === 'cross' && window._crossData) {
+      const d = window._crossData;
+      applyDynamicChartHeight('chartContainer', d.xVals.length, currentChartType);
+      drawCrossChart(d.xVals, d.yVals, d.matrix, d.colors, d.fy);
+    }
+  }, 200);
+});
+</script>
+</body>
+</html>
