@@ -24,5 +24,8 @@ Its offline-first approach ensures that sensitive research data remains local, a
 ## Live Demo
 👉https://umidesign-ai.github.io/survey-insight-visualizer/
 
+## What's new (V7,2026/4)
+- Added "Try Sample Data" for instant demo experience
+
 ## My Role
 End-to-end: idea → design → build
