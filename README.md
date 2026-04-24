@@ -10,12 +10,13 @@ This tool helps transform raw responses into clear patterns that teams can act o
 
 ## Features
 - Upload CSV survey data
-- Translate multilingual responses (ZH/JP → EN)
+- Translate multilingual responses (ZH/JP/EN/DE)
 - Single question & Cross analysis
 - Filter low-frequency responses
 - Visualise insights:Chart & Table
 - Download analysis result
-- RWD UI 
+- RWD UI
+- Light/Dark mode
 
 ## Live Demo
 👉https://umidesign-ai.github.io/survey-insight-visualizer/
